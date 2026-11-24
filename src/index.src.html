@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HELD — Buys the dip whales didn't sell.</title>
+<meta name="description" content="When a Solana coin drops 30% in an hour, HELD checks who sold. Top 10 holders kept their bags: it buys the dip. Whales sold: it skips. Live board, dip X-ray for any CA, and a public log.">
+<meta property="og:title" content="HELD — Buys the dip whales didn't sell.">
+<meta property="og:description" content="Every dip has a seller. HELD checks who. Paste any Solana CA for a dip X-ray.">
+<meta property="og:image" content="https://whalesheld.fun/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@HeldEngine">
+<meta name="twitter:title" content="HELD — Buys the dip whales didn't sell.">
+<meta name="twitter:description" content="Every dip has a seller. HELD checks who.">
+<meta name="twitter:image" content="https://whalesheld.fun/og.png">
+<meta name="theme-color" content="#ffffff">
+<link rel="icon" href="fav.png">
+<link rel="apple-touch-icon" href="fav.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/*@CSS*/
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><rect width="50" height="100" fill="#e1251b"/><rect x="50" width="50" height="100" fill="#0c0c0d"/><rect x="22" y="20" width="18" height="60" fill="#fff"/><rect x="60" y="20" width="18" height="60" fill="#fff"/><rect x="40" y="43" width="20" height="14" fill="#fff"/></symbol>
+</svg>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><svg><use href="#mark"/></svg>HELD</a>
+    <nav><a href="#rule">Rule</a><a href="#board">Board</a><a href="#xray">X-ray</a><a href="#log">Log</a><a href="#engine">Engine</a><a href="#fees">Fees</a><a href="#token">Token</a></nav>
+    <div class="right">
+      <div class="lamp" id="lamp"><i></i><b id="lampWord">connecting</b><span id="lampTxt"></span></div>
+      <a class="btn ink sm" id="buyTop" href="#token">Buy $HELD</a>
+    </div>
+  </div>
+</header>
+
+<div class="tape"><div class="wrap" id="tape">
+  <span><b>BTC</b> near a 4-month low</span><span class="sep">/</span><span>Everything dips</span><span class="sep">/</span><span>Somebody is selling</span>
+  <span class="end">Every dip has a seller. HELD checks who.</span>
+</div></div>
+
+<section class="hero" id="rule">
+  <div class="wrap">
+    <div class="hl">
+      <div class="kicker"><span class="tag">Dip engine · Solana</span><span class="tag beta">Engine: beta</span></div>
+      <h1>Buys the dip<br>whales didn't <span class="u">sell.</span></h1>
+      <p class="rule1"><b>The rule:</b> when a coin drops <b id="rDip">30%</b> in an hour, HELD checks who sold, and buys only if the top 10 holders kept <b id="rHeld">95%</b> of their bags.</p>
+      <form class="check" id="heroCheck" autocomplete="off"><input name="ca" placeholder="Paste any Solana CA" spellcheck="false" aria-label="Contract address"><button>X-ray the dip</button></form>
+      <div class="hint" id="heroHint">Paper hands selling: buy. Whales selling: skip.</div>
+      <div class="carow"><span class="k">$HELD CA</span><code id="ca">posted here and on X at launch</code><button class="linkbtn" id="copyCa" hidden>copy</button></div>
+    </div>
+    <div class="dip" aria-live="polite">
+      <div class="diphead"><span class="sym" id="dSym">$—</span><span class="drop" id="dDrop">scanning</span><span class="k" id="dWhen">live board</span></div>
+      <div class="dipwrap">
+        <div class="stamp WATCH" id="dStamp">SCANNING</div>
+        <div class="dipt">
+          <div class="tile sold"><div class="fall" id="dFall"></div><div class="tl" id="dSoldLbl">Paper hands · last 60 min</div><div class="word">SOLD</div><div class="num" id="dSoldNum">—</div><div class="sub" id="dSoldSub">reading the dip…</div></div>
+          <div class="tile held"><div class="tl">Top 10 holders</div><div class="word">HELD</div><div class="num" id="dHeldNum">—</div><div class="ten" id="dTen"></div></div>
+        </div>
+      </div>
+      <div class="dipfoot"><span class="why" id="dWhy">Reading GeckoTerminal trades and Solana holders…</span><div class="dots" id="dDots"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="board">
+  <div class="wrap">
+    <div class="shead">
+      <div><span class="no">01 / BOARD</span><h2>Who's dipping.<br>Who sold it.</h2></div>
+      <p>Solana coins dropping right now, from GeckoTerminal. Every sell in the dip is matched against the top 10 holders from the chain. Click a row for its X-ray.</p>
+    </div>
+    <div class="bbar">
+      <span class="stat" id="bStat">scanning…</span>
+      <div class="chips" id="chips"><button class="chip on" data-f="all">All</button><button class="chip" data-f="HELD">Held</button><button class="chip" data-f="SOLD">Sold</button><button class="chip" data-f="WATCH">Watch</button></div>
+    </div>
+    <div class="thead"><span></span><span>Coin</span><span>Dip · 1h</span><span>Top 10 held</span><span>Paper hands sold</span><span>Whales sold</span><span>Verdict</span><span>Engine</span></div>
+    <div id="rows"><div class="empty">Scanning Solana pools for dips…</div></div>
+  </div>
+</section>
+
+<section class="s alt" id="xray">
+  <div class="wrap">
+    <div class="shead">
+      <div><span class="no">02 / DIP X-RAY</span><h2>Paste a CA.<br>See who sold.</h2></div>
+      <p>Any Solana coin with a SOL or USDC pool. You get the top 10 bags before and after the dip, what paper hands dumped, the verdict, and a card to post.</p>
+    </div>
+    <div class="xgrid">
+      <div class="xin">
+        <form class="check" id="xCheck" autocomplete="off"><input name="ca" placeholder="Paste any Solana CA" spellcheck="false" aria-label="Contract address"><button>X-ray</button></form>
+        <div class="hint" id="xHint">Try one from the board.</div>
+        <div class="xrule" id="xCfg"></div>
+      </div>
+      <div class="xres" id="xRes"><div class="xempty">The X-ray shows up here: verdict, the top 10 bags, paper hands vs whales, and a share card.</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="how">
+  <div class="wrap">
+    <div class="shead">
+      <div><span class="no">03 / HOW</span><h2>Three reads.<br>One call.</h2></div>
+      <p>Every number below is a setting in the engine's config. Nothing here needs an API key, so anyone can check the work.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="sn">1</div><h3>Spot the dip</h3><p>GeckoTerminal's trending and most-traded Solana pools are scanned all day. A coin that falls hard inside an hour gets pulled for a read.</p><div class="cfg" id="cfg1"></div></div>
+      <div class="step"><div class="sn">2</div><h3>Read the sellers</h3><p>Every trade in the dip is matched against the top holders from Solana RPC. Whale bags that moved without a trade are checked on-chain.</p><div class="cfg" id="cfg2"></div></div>
+      <div class="step"><div class="sn">3</div><h3>Buy or skip</h3><p>Paper hands sold and the whales sat still: the engine buys. A whale dumped: it skips, however cheap it looks.</p><div class="cfg" id="cfg3"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="s alt" id="log">
+  <div class="wrap">
+    <div class="shead">
+      <div><span class="no">04 / LOG</span><h2>Every call,<br>scored.</h2></div>
+      <p>Each HELD and SOLD call is saved with its price, then checked 1 hour and 24 hours later. A buy call scores when the price is higher. A skip scores when it kept falling.</p>
+    </div>
+    <div class="lstats" id="lStats"></div>
+    <div class="xwide"><table class="lt" id="lTable"></table></div>
+    <div class="lnote" id="lNote"></div>
+  </div>
+</section>
+
+<section class="s" id="engine">
+  <div class="wrap">
+    <div class="shead">
+      <div><span class="no">05 / ENGINE</span><h2>A public wallet.<br>Every trade on-chain.</h2></div>
+      <p>The engine buys the board's WOULD BUY calls. While it's in beta the buys are placed by hand from one public wallet, so anyone can match them to the log.</p>
+    </div>
+    <div class="egrid">
+      <div class="ebox" id="eBox"></div>
+      <div><div class="estats" id="eStats"></div><div class="efeed" id="eFeed"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="s alt" id="fees">
+  <div class="wrap">
+    <div class="shead">
+      <div><span class="no">06 / FEES</span><h2>Fees buy the dip.<br>Wins buy $HELD.</h2></div>
+      <p>Creator fees from $HELD run the engine. Every 1 SOL is split the same way, and every profit the engine makes goes back into $HELD.</p>
+    </div>
+    <div class="flow">
+      <div class="f1"><span>Engine: buys dips the whales held</span><b>0.60</b></div>
+      <div class="f2"><span>Buyback + burn $HELD</span><b>0.30</b></div>
+      <div class="f3"><span>Data + servers</span><b>0.10</b></div>
+    </div>
+    <div class="loop">
+      <div><span class="k">1</span><b>Fees come in</b><p>Every $HELD trade pays creator fees in SOL.</p></div>
+      <div><span class="k">2</span><b>Engine buys</b><p>0.60 of every SOL buys coins where the whales held.</p></div>
+      <div><span class="k">3</span><b>Exits in profit</b><p>Winners are sold into strength. Losers are cut.</p></div>
+      <div><span class="k">4</span><b>Buys back $HELD</b><p>100% of the profit buys $HELD on the open market.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="s" id="token">
+  <div class="wrap tok">
+    <div class="tick">$HEL<span>D</span></div>
+    <div class="side">
+      <p style="font-size:17px;line-height:1.5">One token, one engine. $HELD's fees fund the dip buys, and the engine's wins buy $HELD back.</p>
+      <div class="carow"><span class="k">CA</span><code id="ca2">posted here and on X at launch</code><button class="linkbtn" id="copyCa2" hidden>copy</button></div>
+      <div class="herobtns"><a class="btn redb" id="buy" href="#token">Buy on pump.fun</a><a class="btn" id="xlink" href="https://x.com/HeldEngine" target="_blank" rel="noopener">X · @HeldEngine</a><a class="btn" id="dexlink" href="#" target="_blank" rel="noopener" hidden>Chart</a></div>
+    </div>
+  </div>
+</section>
+
+<section class="s alt" id="faq">
+  <div class="wrap">
+    <div class="shead"><div><span class="no">07 / FAQ</span><h2>Questions.</h2></div><p></p></div>
+    <div class="faq">
+      <details><summary>Why does it matter who sold?</summary><p>A dip where only small wallets sell is usually panic: the people with the most to lose are still in. A dip where a top holder dumps is someone with better information getting out. Same red candle, different story. HELD only buys the first kind.</p></details>
+      <details><summary>Who counts as a whale?</summary><p>The 10 biggest wallets as they were before the dip, ranked from today's top holders on Solana plus anyone who sold a big bag during the dip. Pools, bonding curves and program accounts are left out.</p></details>
+      <details><summary>How does it know what a whale held before the dip?</summary><p>It takes each wallet's balance now and adds back what it sold in the last hour (GeckoTerminal trades). Whale bags that moved without a matching trade are read straight from their on-chain transactions.</p></details>
+      <details><summary>Is the engine buying right now?</summary><p>The board and the X-ray are live. The buying is in beta: at launch the buys are placed by hand from a public wallet that follows the board's WOULD BUY calls. The wallet is posted on this page, so every trade can be checked.</p></details>
+      <details><summary>Can it be wrong?</summary><p>Yes. A dip where whales held can keep dipping, and busy coins have more trades than a free API returns, so small sells can be missed. The log scores every call 1 hour and 24 hours later so you can see how often it's right. Nothing here is financial advice.</p></details>
+      <details><summary>Where does the data come from?</summary><p>GeckoTerminal for pools, trades and price candles. Public Solana RPC for holders and wallet moves. No API keys, nothing private.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer><div class="wrap"><a class="brand" href="#"><svg><use href="#mark"/></svg>HELD</a><span>Buys the dip whales didn't sell.</span><span class="end">Not financial advice · Engine in beta · <span id="footSite">whalesheld.fun</span></span></div></footer>
+<div class="toast" id="toast"></div>
+
+<script>
+/*@CORE*/
+</script>
+<script>
+/*@APP*/
+</script>
+</body>
+</html>

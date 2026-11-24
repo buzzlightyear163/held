@@ -1,0 +1,5 @@
+{
+  "cleanUrls": true,
+  "functions": { "api/held.js": { "maxDuration": 45 } },
+  "headers": [{ "source": "/(.*)\\.png", "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }] }]
+}
