@@ -55,7 +55,8 @@ När en Solana-coin faller 30 % på en timme kollar HELD vem som sålde. Topp 10
 
 ## Datakällor (gratis, inga nycklar)
 
-- **GeckoTerminal:** trending + mest handlade Solana-pooler, trades per pool (senaste 300 + stora sälj över hela timmen för stora coins), 5-minuterscandles för loggen.
+- **Jupiter (`datapi.jup.ag/v1`):** dip-listan (1h trending / mest handlade / organic, 100 pooler var med 1h-statistik), trades per coin (`/txs`) och 1h-säljvolym.
+- **GeckoTerminal:** stora sälj över hela timmen för väldigt aktiva coins, och 5-minuterscandles för loggen. Reserv för dip-listan.
 - **Jupiter (`datapi.jup.ag/v1/holders`):** varje coins topp 100-holders. Pooler, bonding curves och program-ägda konton räknas inte som valar.
 - **Solana RPC (publicnode):** program-koll av holders, mintens supply, och valar som rört påsen utan trade läses on-chain (`getSignaturesForAddress` + `getTransaction`). OBS: publicnode ger inte längre `getTokenLargestAccounts` gratis, därför Jupiter.
 - **CoinGecko:** BTC-priset och fyramånaderslägsta i den röda remsan överst.

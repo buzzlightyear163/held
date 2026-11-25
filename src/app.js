@@ -167,7 +167,7 @@ function xrayHTML(x, inDrawer) {
   if (x.err) return `<div class="xerr">${esc(x.err)}</div>`;
   const ws = x.whales || [];
   const cov = x.cover || {};
-  const covTxt = cov.full ? `every trade in the last ${cov.all} min (${cov.trades} trades)` : `all trades in the last ${cov.all} min + sells over $${cov.bigMin} for ${cov.big} min (${cov.trades} trades)`;
+  const covTxt = cov.full ? `every trade in the last ${cov.all} min (${cov.trades} trades)` : cov.bigMin ? `every trade in the last ${cov.all} min + trades over $${cov.bigMin} for ${cov.big} min (${cov.trades} trades)` : `every trade in the last ${cov.all} min (${cov.trades} trades)`;
   const links = `<a href="https://dexscreener.com/solana/${esc(x.pool)}" target="_blank" rel="noopener">DexScreener</a><a href="https://www.geckoterminal.com/solana/pools/${esc(x.pool)}" target="_blank" rel="noopener">GeckoTerminal</a><a href="https://solscan.io/token/${esc(x.mint)}#holders" target="_blank" rel="noopener">Holders</a>`;
   const rows = ws.map(w => {
     const note = w.left ? '<span class="tag red">sold out of the top 100</span>' : w.moved < 0 ? `<span class="tag red">moved ${tok(-w.moved)}</span>` : w.boughtSol > 0.05 && w.held >= 1 ? '<span class="tag">added</span>' : "";
@@ -180,7 +180,7 @@ function xrayHTML(x, inDrawer) {
     <div class="xverd"><i class="v ${x.verdict}">${x.verdict === "NODIP" ? "NO DIP" : x.verdict}</i><span class="why">${x.verdict === "HELD" ? "Engine would buy: " : x.verdict === "SOLD" ? "Engine skips: " : x.verdict === "NODIP" ? "" : "Engine watches: "}${esc(x.verdict === "NODIP" ? cap(x.reason || "") : x.reason || "")}</span></div>
     <div class="xstats"><div><span class="k">Dip · 1h</span><b class="red">${dipS(x.dip)}</b></div><div><span class="k">Top 10 held</span><b>${heldS(x.heldPct)}</b></div><div><span class="k">Paper hands sold</span><b>${solS(x.paperSoldSol)}</b></div><div><span class="k">Whales sold</span><b>${solS(x.whaleSoldSol)}</b></div></div>
     <div class="xwide"><table class="wt"><thead><tr><th>#</th><th>Wallet</th><th class="r hide-m">Bag before</th><th class="r hide-m">Now</th><th>Held</th><th class="r">Sold</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No holder data.</td></tr>`}</tbody></table></div>
-    <div class="xnote">Read ${ago(x.t)}: ${covTxt} from GeckoTerminal, matched against the top 100 holders${x.holders ? " of " + x.holders.toLocaleString("en-US") : ""} (Jupiter)${cov.verified ? `, ${cov.verified} whale wallets checked on-chain for moves` : ""}. ${x.paperSellers || 0} wallets outside the top 10 sold ${solS(x.paperSoldSol)}.${x.poolPct ? ` ${x.poolPct.toFixed(0)}% of supply sits in pools.` : ""}</div>
+    <div class="xnote">Read ${ago(x.t)}: ${covTxt} from Jupiter and GeckoTerminal, matched against the top 100 holders${x.holders ? " of " + x.holders.toLocaleString("en-US") : ""} (Jupiter)${cov.verified ? `, ${cov.verified} whale wallets checked on-chain for moves` : ""}. ${x.paperSellers || 0} wallets outside the top 10 sold ${solS(x.paperSoldSol)}.${x.poolPct ? ` ${x.poolPct.toFixed(0)}% of supply sits in pools.` : ""}</div>
     <div class="share"><canvas width="1200" height="630" data-pool="${esc(x.pool)}"></canvas>
       <div class="acts"><button class="btn sm ink" data-act="x" data-pool="${esc(x.pool)}">Post on X</button><button class="btn sm" data-act="copy" data-pool="${esc(x.pool)}">Copy image</button><button class="btn sm" data-act="dl" data-pool="${esc(x.pool)}">Download PNG</button><button class="btn sm" data-act="link" data-pool="${esc(x.pool)}">Copy link</button></div></div>
   </div>`;
@@ -369,7 +369,7 @@ async function engineInit() {
     for (const s of (sigs || [])) {
       if (s.err || ENG.seen.has(s.signature)) continue; ENG.seen.add(s.signature);
       let t = ENG.cache[s.signature];
-      if (t === undefined) { try { const tx = await C.rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]); t = tx && tx.meta ? parseEngineTx(tx, s.signature) : null; ENG.cache[s.signature] = t; } catch (e) { continue; } }
+      if (t === undefined) { try { const tx = await C.rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1 }]); t = tx && tx.meta ? parseEngineTx(tx, s.signature) : null; ENG.cache[s.signature] = t; } catch (e) { continue; } }
       if (t) ENG.trades.push(t);
     }
     ENG.trades.sort((a, b) => b.ts - a.ts); ls.set("held.eng.v1", ENG.cache);
