@@ -829,6 +829,13 @@ footer .end{margin-left:auto}
   async function board(R, cache, onUpdate) {
     R = R || RULE; cache = cache || new Map();
     let L; try { L = await scanJup(); } catch (e) { note("jupiter list " + why(e)); L = await scanList(); }
+    if (L.src === "jupiter") { // add GeckoTerminal's 1h trending (one call) for coins Jupiter's lists miss
+      try {
+        const g = await gt("/networks/solana/trending_pools?duration=1h&page=1"), have = new Set(L.pools.map(p => p.mint));
+        for (const x of (g.data || []).map(d => poolOf(d))) if (x.mint && !have.has(x.mint) && !SKIP.has(x.mint) && QUOTES.has(x.quote)) { L.pools.push(x); have.add(x.mint); L.scanned++; }
+        if (!L.solUsd) L.solUsd = solUsdOf((g.data || []).map(d => poolOf(d)));
+      } catch (e) { /* Jupiter's lists are enough */ }
+    }
     if (!L.solUsd) L.solUsd = await solPrice();
     const dipping = L.pools.filter(p => -p.dip >= R.watch && p.liq >= R.minLiq && p.vol1h >= R.minVol).sort((a, b) => a.dip - b.dip);
     const pick = dipping.slice(0, R.boardMax);
