@@ -12,7 +12,7 @@ När en Solana-coin faller 30 % på en timme kollar HELD vem som sålde. Topp 10
 
 **Riktigt (live, gratis data, inga API-nycklar):**
 - **Tavlan:** Solana-coins som dippar just nu (GeckoTerminal trending + mest handlade pooler). Varje coin får HELD / SOLD / WATCH och ett skäl på en rad.
-- **Dip X-ray:** klistra in valfri CA. Visar topp 10-plånböckerna före och efter dippen, vad paper hands sålde i SOL, valar som lämnat topp 20 eller flyttat påsen, och utslaget. Länk: `?ca=<mint>`.
+- **Dip X-ray:** klistra in valfri CA. Visar topp 10-plånböckerna före och efter dippen, vad paper hands sålde i SOL, valar som sålt sig ur topp 100 eller flyttat påsen, och utslaget. Länk: `?ca=<mint>`.
 - **Delningskort** 1200×630: Post on X, Copy image, Download PNG, Copy link.
 - **Loggen:** varje HELD/SOLD-utslag sparas med pris och poängsätts 1 h och 24 h senare (GeckoTerminal-candles).
 - **Motorplånboken:** när `engineWallet` är ifylld läses saldo och alla köp/sälj direkt från kedjan.
@@ -56,13 +56,14 @@ När en Solana-coin faller 30 % på en timme kollar HELD vem som sålde. Topp 10
 ## Datakällor (gratis, inga nycklar)
 
 - **GeckoTerminal:** trending + mest handlade Solana-pooler, trades per pool (senaste 300 + stora sälj över hela timmen för stora coins), 5-minuterscandles för loggen.
-- **Solana RPC (publicnode):** topp-holders (`getTokenLargestAccounts`), ägare och pooler (program-ägda konton räknas inte som valar), valars påsar som rört sig utan trade läses on-chain (`getSignaturesForAddress` + `getTransaction`).
+- **Jupiter (`datapi.jup.ag/v1/holders`):** varje coins topp 100-holders. Pooler, bonding curves och program-ägda konton räknas inte som valar.
+- **Solana RPC (publicnode):** program-koll av holders, mintens supply, och valar som rört påsen utan trade läses on-chain (`getSignaturesForAddress` + `getTransaction`). OBS: publicnode ger inte längre `getTokenLargestAccounts` gratis, därför Jupiter.
 - **CoinGecko:** BTC-priset och fyramånaderslägsta i den röda remsan överst.
-- Om servern inte svarar kör sajten samma motor direkt i webbläsaren. Om inget går märks det "snapshot" eller "preview · sample data".
+- **Motorn körs i besökarens webbläsare** (egen IP mot GeckoTerminal/Jupiter/RPC). Från Vercels delade servrar svarar GeckoTerminal och publika RPC ofta 429/403, så servern är bara reserv. Om inget går märks det "snapshot" eller "preview · sample data".
 
 ## Loggen
 
-Loggen delas av alla besökare och ligger i funktionens minne, plus i varje besökares webbläsare. För en permanent delad logg: Vercel → Storage → Upstash Redis → Connect till projektet. Då sätts `KV_REST_API_URL` och `KV_REST_API_TOKEN` och loggen sparar sig själv, ingen kodändring.
+Varje besökares webbläsare skickar in de utslag den läser (`/api/held?op=log`), så loggen delas av alla. Den ligger i funktionens minne plus i varje webbläsare. För en permanent delad logg: Vercel → Storage → Upstash Redis → Connect till projektet. Då sätts `KV_REST_API_URL` och `KV_REST_API_TOKEN` och loggen sparar sig själv, ingen kodändring.
 
 ## Deploy
 
@@ -72,7 +73,7 @@ GitHub → Vercel. Framework: **Other**, ingen build. `api/` blir en funktion av
 
 - **Typsnitt:** Archivo (rubriker) och IBM Plex Mono (siffror) laddar.
 - **X-förhandsvisning:** klistra in länken i ett utkast på X, `og.png` ska synas.
-- **Live-lampan** uppe till höger säger LIVE, och tavlan fylls inom ungefär en halv minut. `/api/held?op=board` ska ge JSON.
+- **Live-lampan** uppe till höger säger LIVE, och tavlan fylls inom ungefär en halv minut. `/api/held?op=diag` visar om datakällorna svarar från servern.
 - `?preview` visar exempeldata, `?debug` visar status för datakällorna.
 
 ## Ärliga begränsningar

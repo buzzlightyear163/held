@@ -18,7 +18,7 @@ const CONFIG = {
     minVol: 4000,   // 1h volume floor, $
     boardMax: 7,    // coins X-rayed per scan
   },
-  refreshSec: 30,
+  refreshSec: 45,
   api: "/api/held",
 };
 
@@ -63,32 +63,25 @@ const CACHE = new Map();
 let BOARD = null, FILTER = "all", OPEN = null, HERO_I = 0, HERO_LIST = [], NEXT = 0;
 async function loadBoard() {
   if (PREVIEW) { BOARD = sample(); ST.mode = "preview"; return afterBoard(); }
-  try {
-    let b;
-    if (ST.mode !== "direct") {
-      try { b = await getJ(CONFIG.api + "?op=board&r=" + encodeURIComponent(RS), 45000); }
-      catch (e) { ST.err = "api: " + e.message; if (location.protocol === "file:" || ++ST.fails >= 2) ST.mode = "direct"; throw e; }
-    }
-    if (!b) { b = await C.board(R, CACHE); b.source = "direct"; b.storage = "browser"; }
-    ST.fails = 0; ST.last = now(); BOARD = b; if (ST.mode !== "direct") ST.mode = "live";
-    ls.set("held.board.v1", b);
-  } catch (e) {
-    ST.err = (ST.err ? ST.err + " | " : "") + e.message;
-    if (ST.mode === "direct" && !BOARD) { try { const b = await C.board(R, CACHE); b.source = "direct"; b.storage = "browser"; BOARD = b; ST.last = now(); ls.set("held.board.v1", b); } catch (e2) { ST.err += " | direct: " + e2.message; } }
-    if (!BOARD) { const snap = ls.get("held.board.v1", null); if (snap && snap.coins) { BOARD = snap; ST.mode = "snapshot"; } else { BOARD = sample(); ST.mode = "preview"; } }
-    else if (now() - ST.last > 120000) ST.mode = "snapshot";
-  }
+  let b = null;
+  // 1) in this browser: GeckoTerminal + Jupiter + Solana RPC from the visitor's own connection
+  try { b = await C.board(R, CACHE); b.source = "browser"; }
+  catch (e) { ST.err = "browser: " + e.message; }
+  // 2) the server, if the browser path failed
+  if (!b) { try { b = await getJ(CONFIG.api + "?op=board&r=" + encodeURIComponent(RS), 45000); } catch (e) { ST.err += " | api: " + e.message; } }
+  if (b && b.coins) { BOARD = b; ST.mode = "live"; ST.last = now(); ls.set("held.board.v1", b); }
+  else if (!BOARD) { const snap = ls.get("held.board.v1", null); if (snap && snap.coins) { BOARD = snap; ST.mode = "snapshot"; } else { BOARD = sample(); ST.mode = "preview"; } }
+  else if (now() - ST.last > 150000) ST.mode = "snapshot";
   afterBoard();
 }
 function afterBoard() {
-  if (ST.mode === "direct" && BOARD && now() - (BOARD.t || 0) < 120000) ST.mode = "live";
   collectLog(BOARD);
   renderLamp(); renderBoard(); renderHeroList(); renderLog(); renderTape();
 }
 function schedule() { NEXT = now() + CONFIG.refreshSec * 1000; setTimeout(async () => { if (!document.hidden) await loadBoard(); schedule(); }, CONFIG.refreshSec * 1000); }
 
 function renderLamp() {
-  const l = $("#lamp"), live = ST.mode === "live" || ST.mode === "direct";
+  const l = $("#lamp"), live = ST.mode === "live";
   l.className = "lamp" + (live ? " live" : "");
   $("#lampWord").textContent = live ? "live" : ST.mode === "snapshot" ? "snapshot" : ST.mode === "preview" ? "preview" : "connecting";
   $("#lampTxt").textContent = BOARD ? " · " + (BOARD.dipping || 0) + " dips watched" : "";
@@ -177,7 +170,7 @@ function xrayHTML(x, inDrawer) {
   const covTxt = cov.full ? `every trade in the last ${cov.all} min (${cov.trades} trades)` : `all trades in the last ${cov.all} min + sells over $${cov.bigMin} for ${cov.big} min (${cov.trades} trades)`;
   const links = `<a href="https://dexscreener.com/solana/${esc(x.pool)}" target="_blank" rel="noopener">DexScreener</a><a href="https://www.geckoterminal.com/solana/pools/${esc(x.pool)}" target="_blank" rel="noopener">GeckoTerminal</a><a href="https://solscan.io/token/${esc(x.mint)}#holders" target="_blank" rel="noopener">Holders</a>`;
   const rows = ws.map(w => {
-    const note = w.left ? '<span class="tag red">left the top 20</span>' : w.moved < 0 ? `<span class="tag red">moved ${tok(-w.moved)}</span>` : w.boughtSol > 0.05 && w.held >= 1 ? '<span class="tag">added</span>' : "";
+    const note = w.left ? '<span class="tag red">sold out of the top 100</span>' : w.moved < 0 ? `<span class="tag red">moved ${tok(-w.moved)}</span>` : w.boughtSol > 0.05 && w.held >= 1 ? '<span class="tag">added</span>' : "";
     return `<tr><td>#${w.rank}</td><td><a href="https://solscan.io/account/${esc(w.owner)}" target="_blank" rel="noopener">${short(w.owner)}</a>${note}</td>
       <td class="r hide-m">${tok(w.pre)}${w.supplyPct != null ? ` <span class="mute">${w.supplyPct.toFixed(1)}%</span>` : ""}</td><td class="r hide-m">${tok(w.now)}</td>
       <td><span class="hb"><i style="width:${Math.round(w.held * 100)}%"></i></span>${heldS(w.held * 100)}</td><td class="r">${w.soldSol > 0.005 ? solS(w.soldSol) : "—"}</td></tr>`;
@@ -187,7 +180,7 @@ function xrayHTML(x, inDrawer) {
     <div class="xverd"><i class="v ${x.verdict}">${x.verdict === "NODIP" ? "NO DIP" : x.verdict}</i><span class="why">${x.verdict === "HELD" ? "Engine would buy: " : x.verdict === "SOLD" ? "Engine skips: " : x.verdict === "NODIP" ? "" : "Engine watches: "}${esc(x.verdict === "NODIP" ? cap(x.reason || "") : x.reason || "")}</span></div>
     <div class="xstats"><div><span class="k">Dip · 1h</span><b class="red">${dipS(x.dip)}</b></div><div><span class="k">Top 10 held</span><b>${heldS(x.heldPct)}</b></div><div><span class="k">Paper hands sold</span><b>${solS(x.paperSoldSol)}</b></div><div><span class="k">Whales sold</span><b>${solS(x.whaleSoldSol)}</b></div></div>
     <div class="xwide"><table class="wt"><thead><tr><th>#</th><th>Wallet</th><th class="r hide-m">Bag before</th><th class="r hide-m">Now</th><th>Held</th><th class="r">Sold</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No holder data.</td></tr>`}</tbody></table></div>
-    <div class="xnote">Read ${ago(x.t)}: ${covTxt} from GeckoTerminal, matched against the top holders from Solana RPC${cov.verified ? `, ${cov.verified} whale bags checked on-chain for moves` : ""}. ${x.paperSellers || 0} wallets outside the top 10 sold ${solS(x.paperSoldSol)}.${x.poolPct ? ` ${x.poolPct.toFixed(0)}% of supply sits in pools.` : ""}</div>
+    <div class="xnote">Read ${ago(x.t)}: ${covTxt} from GeckoTerminal, matched against the top 100 holders${x.holders ? " of " + x.holders.toLocaleString("en-US") : ""} (Jupiter)${cov.verified ? `, ${cov.verified} whale wallets checked on-chain for moves` : ""}. ${x.paperSellers || 0} wallets outside the top 10 sold ${solS(x.paperSoldSol)}.${x.poolPct ? ` ${x.poolPct.toFixed(0)}% of supply sits in pools.` : ""}</div>
     <div class="share"><canvas width="1200" height="630" data-pool="${esc(x.pool)}"></canvas>
       <div class="acts"><button class="btn sm ink" data-act="x" data-pool="${esc(x.pool)}">Post on X</button><button class="btn sm" data-act="copy" data-pool="${esc(x.pool)}">Copy image</button><button class="btn sm" data-act="dl" data-pool="${esc(x.pool)}">Download PNG</button><button class="btn sm" data-act="link" data-pool="${esc(x.pool)}">Copy link</button></div></div>
   </div>`;
@@ -205,11 +198,13 @@ async function runXray(raw, scroll) {
     if (fromBoard) x = fromBoard;
     else if (PREVIEW) x = sampleX(ca);
     else {
-      try { x = await getJ(CONFIG.api + "?op=xray&ca=" + ca + "&r=" + encodeURIComponent(RS), 40000); }
-      catch (e) {
-        if (e.status === 404 || e.status === 400) throw e;
-        const P = await C.poolsForMint(ca); if (!P.pool) throw new Error("No SOL or USDC pool found for this coin on GeckoTerminal yet.");
+      try {
+        const P = await C.poolsForMint(ca);
+        if (!P.pool) { const e = new Error("No SOL or USDC pool found for this coin on GeckoTerminal yet"); e.final = true; throw e; }
         x = await C.xray(P.pool, R, P.solUsd);
+      } catch (e) {
+        if (e.final) throw e;
+        x = await getJ(CONFIG.api + "?op=xray&ca=" + ca + "&r=" + encodeURIComponent(RS), 40000);
       }
     }
     XR = x; CACHE.set(x.pool, x);
@@ -294,14 +289,31 @@ let LLOG = ls.get("held.log.v1", []);
 function collectLog(b) {
   if (!b || ST.mode === "preview") return;
   const seen = new Map(LLOG.map(e => [e.id, e]));
-  for (const e of ((b.log && b.log.items) || [])) { const o = seen.get(e.id); if (!o) { LLOG.push(e); seen.set(e.id, e); } else { if (e.p1h != null) o.p1h = e.p1h; if (e.p24h != null) o.p24h = e.p24h; } }
+  for (const e of ((b.log && b.log.items) || [])) { if (!e || !e.id) continue; const o = seen.get(e.id); if (!o) { LLOG.push(e); seen.set(e.id, e); } else { if (e.p1h != null) o.p1h = e.p1h; if (e.p24h != null) o.p24h = e.p24h; } }
   for (const x of b.coins || []) {
     if (x.err || (x.verdict !== "HELD" && x.verdict !== "SOLD")) continue;
     if (LLOG.some(e => e.mint === x.mint && e.verdict === x.verdict && x.t - e.t < 6 * 3600000)) continue;
-    const e = C.logEntry(x); LLOG.push(e); seen.set(e.id, e);
+    const e = C.logEntry(x); LLOG.push(e); seen.set(e.id, e); SHARE.add(e.id);
   }
   LLOG.sort((a, b2) => b2.t - a.t); if (LLOG.length > 300) LLOG.length = 300;
   ls.set("held.log.v1", LLOG);
+  pushShared();
+}
+// the shared log: every visitor's browser adds the calls it sees, so the log keeps growing for everyone
+const SHARE = new Set(); let SHARED = { storage: null, at: 0 };
+async function pullShared() {
+  if (PREVIEW) return;
+  try {
+    const j = await getJ(CONFIG.api + "?op=log", 12000); SHARED = { storage: j.storage, at: now() };
+    const seen = new Map(LLOG.map(e => [e.id, e]));
+    for (const e of j.items || []) { const o = seen.get(e.id); if (!o) LLOG.push(e); else { if (o.p1h == null && e.p1h != null) o.p1h = e.p1h; if (o.p24h == null && e.p24h != null) o.p24h = e.p24h; } }
+    LLOG.sort((a, b) => b.t - a.t); if (LLOG.length > 300) LLOG.length = 300; ls.set("held.log.v1", LLOG); renderLog();
+  } catch (e) { /* the log still works in this browser */ }
+}
+async function pushShared() {
+  if (PREVIEW || !SHARE.size) return;
+  const items = LLOG.filter(e => SHARE.has(e.id)).slice(0, 30); SHARE.clear();
+  try { await fetch(CONFIG.api + "?op=log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) }); } catch (e) { /* retried with the next call */ }
 }
 let resolving = false;
 async function resolveLocal() {
@@ -309,11 +321,12 @@ async function resolveLocal() {
   const due = LLOG.filter(e => (e.p1h == null && now() > e.t + 3900000) || (e.p24h == null && now() > e.t + 86700000 && now() - e.t < 4 * 86400000)).slice(0, 4);
   for (const e of due) {
     try {
-      let r; try { r = await getJ(CONFIG.api + "?op=outcome&pool=" + e.pool + "&t=" + e.t, 15000); } catch (er) { const o = { pool: e.pool, t: e.t }; await C.outcome(o); r = o; }
+      let r; try { const o = { pool: e.pool, t: e.t }; await C.outcome(o); r = o; } catch (er) { r = await getJ(CONFIG.api + "?op=outcome&pool=" + e.pool + "&t=" + e.t, 15000); }
       if (r.p1h != null) e.p1h = r.p1h; if (r.p24h != null) e.p24h = r.p24h;
+      if (r.p1h != null || r.p24h != null) SHARE.add(e.id);
     } catch (er) { break; }
   }
-  ls.set("held.log.v1", LLOG); resolving = false; if (due.length) renderLog();
+  ls.set("held.log.v1", LLOG); resolving = false; if (due.length) { renderLog(); pushShared(); }
 }
 function renderLog() {
   const items = ST.mode === "preview" ? sampleLog() : LLOG;
@@ -331,9 +344,8 @@ function renderLog() {
   $("#lTable").innerHTML = `<thead><tr><th>Time (UTC)</th><th>Coin</th><th>Call</th><th class="r">Dip</th><th class="r hide-m">Top 10 held</th><th class="r hide-m">Price</th><th class="r">1h later</th><th class="r">24h later</th></tr></thead><tbody>${
     items.slice(0, 40).map(e => `<tr><td>${dm(e.t)} ${hm(e.t)}</td><td><a data-ca="${esc(e.mint)}" href="#xray">$${esc(e.sym)}</a></td><td><i class="v ${e.verdict}" style="min-width:0;padding:4px 7px;font-size:11px">${e.verdict === "HELD" ? "BUY" : "SKIP"}</i></td><td class="r red">${dipS(e.dip)}</td><td class="r hide-m">${heldS(e.heldPct)}</td><td class="r hide-m">${px(e.price)}</td>${cell(e.p1h, e, 3600000)}${cell(e.p24h, e, 86400000)}</tr>`).join("") ||
     `<tr><td colspan="8" class="mute" style="padding:22px 0">No calls yet. A call is logged the moment a coin drops ${R.dip}%+ and the read says HELD or SOLD.</td></tr>`}</tbody>`;
-  const storage = BOARD && BOARD.storage;
   $("#lNote").textContent = ST.mode === "preview" ? "Preview: sample calls, not real data." :
-    `Prices from GeckoTerminal 5-minute candles. ${storage === "shared" ? "The log is shared by every visitor." : "This page also keeps the calls it has seen in your browser, so the log grows while you watch."} ✓ = the call was right.`;
+    `Prices from GeckoTerminal 5-minute candles. Every visitor's browser adds the calls it reads${SHARED.storage ? "" : " (this browser keeps its own copy too)"}. ✓ = the call was right.`;
 }
 
 // ================= engine =================
@@ -444,10 +456,10 @@ function wireCA() {
 }
 function debugBox() {
   if (!DEBUG) return; let el = $("#debug"); if (!el) { el = document.createElement("div"); el.id = "debug"; document.body.appendChild(el); }
-  el.textContent = `mode ${ST.mode}\nsource ${BOARD && BOARD.source}\nstorage ${BOARD && BOARD.storage}\nboard ${BOARD ? ago(BOARD.t) : "-"}\nerr ${ST.err}\ncore ${JSON.stringify(C.STAT)}\nrule ${RS}`;
+  el.textContent = `mode ${ST.mode}\nsource ${BOARD && BOARD.source}\nlog ${SHARED.storage}\nboard ${BOARD ? ago(BOARD.t) : "-"}\nerr ${ST.err}\ncore ${JSON.stringify(C.STAT)}\nrule ${RS}`;
 }
 cfgLines(); wireCA(); renderEngine(); renderTape(); renderLog();
 loadBoard().then(() => { schedule(); heroTimer(); const ca = Q.get("ca") || Q.get("c"); if (ca) runXray(ca, true); else if (HERO_LIST[0]) { XR = HERO_LIST[0]; $("#xRes").innerHTML = xrayHTML(XR); drawShare($("#xRes canvas"), XR); } });
-loadMarket(); engineInit();
+loadMarket(); engineInit(); pullShared(); setInterval(pullShared, 180000);
 setInterval(() => { resolveLocal(); if (BOARD) { renderLamp(); const s = $("#bStat"); if (s && BOARD) s.innerHTML = s.innerHTML.replace(/updated [^<]*$/, "updated " + ago(BOARD.t)); } debugBox(); }, 5000);
 setTimeout(resolveLocal, 4000);

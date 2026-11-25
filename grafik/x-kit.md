@@ -51,7 +51,7 @@ What's live on the site:
 → Share card: every X-ray turns into a card you can post
 → The log: every call saved with its price and scored 1 hour and 24 hours later, wins and misses
 
-How it reads a dip: the last hour of trades from GeckoTerminal, matched against the top holders from Solana RPC. Whale bags that moved without a trade get checked on-chain. No API keys, so anyone can check the work.
+How it reads a dip: the last hour of trades from GeckoTerminal, matched against the coin's top 100 holders. Whale wallets that moved without a trade get checked on-chain. No API keys, so anyone can check the work.
 
 The engine runs on creator fees. Every 1 SOL: 0.60 buys the dips the whales held, 0.30 buys back and burns $HELD, 0.10 runs the data. Every profit goes back into $HELD. It's in beta: buys run by hand from one public wallet, every trade on-chain.
 
@@ -86,7 +86,7 @@ Paste any Solana CA into the Dip X-ray and it shows the one thing a chart can't:
 
 → The top 10 wallets: their bag before the dip, and now
 → What paper hands dumped, in SOL, and from how many wallets
-→ Whales that left the top 20 or quietly moved their bag
+→ Whales that sold out of the top 100 or quietly moved their bag
 → The call: HELD, SOLD or WATCH, with the reason in one line
 
 Every X-ray ends in a card you can post: the dip, how much the whales held, what paper hands sold, and what the engine would do.

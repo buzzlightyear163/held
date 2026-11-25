@@ -418,7 +418,7 @@ footer .end{margin-left:auto}
     </div>
     <div class="steps">
       <div class="step"><div class="sn">1</div><h3>Spot the dip</h3><p>GeckoTerminal's trending and most-traded Solana pools are scanned all day. A coin that falls hard inside an hour gets pulled for a read.</p><div class="cfg" id="cfg1"></div></div>
-      <div class="step"><div class="sn">2</div><h3>Read the sellers</h3><p>Every trade in the dip is matched against the top holders from Solana RPC. Whale bags that moved without a trade are checked on-chain.</p><div class="cfg" id="cfg2"></div></div>
+      <div class="step"><div class="sn">2</div><h3>Read the sellers</h3><p>Every trade in the dip is matched against the coin's top 100 holders. Whale wallets that moved without a trade are checked on-chain.</p><div class="cfg" id="cfg2"></div></div>
       <div class="step"><div class="sn">3</div><h3>Buy or skip</h3><p>Paper hands sold and the whales sat still: the engine buys. A whale dumped: it skips, however cheap it looks.</p><div class="cfg" id="cfg3"></div></div>
     </div>
   </div>
@@ -486,10 +486,10 @@ footer .end{margin-left:auto}
     <div class="faq">
       <details><summary>Why does it matter who sold?</summary><p>A dip where only small wallets sell is usually panic: the people with the most to lose are still in. A dip where a top holder dumps is someone with better information getting out. Same red candle, different story. HELD only buys the first kind.</p></details>
       <details><summary>Who counts as a whale?</summary><p>The 10 biggest wallets as they were before the dip, ranked from today's top holders on Solana plus anyone who sold a big bag during the dip. Pools, bonding curves and program accounts are left out.</p></details>
-      <details><summary>How does it know what a whale held before the dip?</summary><p>It takes each wallet's balance now and adds back what it sold in the last hour (GeckoTerminal trades). Whale bags that moved without a matching trade are read straight from their on-chain transactions.</p></details>
+      <details><summary>How does it know what a whale held before the dip?</summary><p>It takes each wallet's balance now and adds back what it sold in the last hour (GeckoTerminal trades). A whale that sold out of the top 100 still counts. Whale bags that moved without a matching trade are read straight from their on-chain transactions.</p></details>
       <details><summary>Is the engine buying right now?</summary><p>The board and the X-ray are live. The buying is in beta: at launch the buys are placed by hand from a public wallet that follows the board's WOULD BUY calls. The wallet is posted on this page, so every trade can be checked.</p></details>
       <details><summary>Can it be wrong?</summary><p>Yes. A dip where whales held can keep dipping, and busy coins have more trades than a free API returns, so small sells can be missed. The log scores every call 1 hour and 24 hours later so you can see how often it's right. Nothing here is financial advice.</p></details>
-      <details><summary>Where does the data come from?</summary><p>GeckoTerminal for pools, trades and price candles. Public Solana RPC for holders and wallet moves. No API keys, nothing private.</p></details>
+      <details><summary>Where does the data come from?</summary><p>GeckoTerminal for pools, trades and price candles. Jupiter for each coin's top 100 holders. Public Solana RPC for wallet moves. No API keys, nothing private. The reads run in your own browser.</p></details>
     </div>
   </div>
 </section>
@@ -500,14 +500,15 @@ footer .end{margin-left:auto}
 <script>
 /* HELD core: finds Solana coins that are dipping, reads who sold the dip, and decides.
    Runs in the Vercel function (api/held.js) and in the browser (fallback when the API is down).
-   Free, keyless sources only: GeckoTerminal (pools, trades, candles) and public Solana RPC (holders). */
+   Free, keyless sources only: GeckoTerminal (pools, trades, candles), Jupiter (top 100 holders) and public Solana RPC (wallet moves). */
 (function (root, factory) {
   const m = factory();
   if (typeof module === "object" && module.exports) module.exports = m; else root.HELDCORE = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   const GT = "https://api.geckoterminal.com/api/v2";
-  const RPCS = ["https://solana-rpc.publicnode.com", "https://public.rpc.solanavibestation.com", "https://api.mainnet-beta.solana.com"];
+  const RPCS = ["https://solana-rpc.publicnode.com", "https://api.mainnet-beta.solana.com"];
+  const JUP = "https://datapi.jup.ag/v1";
   const SOL = "So11111111111111111111111111111111111111112";
   const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
   const USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
@@ -557,7 +558,7 @@ footer .end{margin-left:auto}
     }
     return fn => new Promise((res, rej) => { q.push({ fn, res, rej }); pump(); });
   }
-  const gq = queue(260, 2), rq = queue(40, 6);
+  const gq = queue(260, 2), rq = queue(40, 6), jq = queue(150, 2);
   const STAT = { gt: 0, gtErr: 0, rpc: 0, rpcErr: 0, last429: 0, errs: [] };
   const why = e => (e && e.message || String(e)) + (e && e.cause ? " (" + (e.cause.code || e.cause.message || e.cause) + ")" : "");
   const note = t => { STAT.errs.unshift(new Date().toISOString().slice(11, 19) + " " + t); if (STAT.errs.length > 12) STAT.errs.length = 12; };
@@ -577,6 +578,12 @@ footer .end{margin-left:auto}
       catch (e) { STAT.gtErr++; note("gt " + path.slice(0, 50) + " " + why(e)); if (e.status === 429) { STAT.last429 = Date.now(); await sleep(1600 * (i + 1)); continue; } if (i === 2 || (e.status && e.status !== 502 && e.status !== 503)) throw e; await sleep(500); }
     }
     throw new Error("geckoterminal busy");
+  }
+  async function jup(path) {
+    for (let i = 0; i < 2; i++) {
+      try { return await jq(() => getJSON(JUP + path)); }
+      catch (e) { note("jup " + path.slice(0, 40) + " " + why(e)); if (i) throw e; await sleep(e.status === 429 ? 1500 : 400); }
+    }
   }
   let rpcAt = 0;
   async function rpc(method, params) {
@@ -613,7 +620,7 @@ footer .end{margin-left:auto}
 
   async function scanList() {
     const paths = ["/networks/solana/trending_pools?duration=1h&page=1", "/networks/solana/trending_pools?duration=1h&page=2",
-      "/networks/solana/trending_pools?duration=6h&page=1", "/networks/solana/pools?page=1&sort=h24_tx_count_desc"];
+      "/networks/solana/pools?page=1&sort=h24_tx_count_desc"];
     const res = await Promise.allSettled(paths.map(p => gt(p)));
     const all = [];
     for (const r of res) if (r.status === "fulfilled" && r.value && r.value.data) for (const p of r.value.data) all.push(poolOf(p));
@@ -664,44 +671,32 @@ footer .end{margin-left:auto}
     return { trades, cover: { all: full ? R.windowMin : allMin, big: bigCov, bigMin, full } };
   }
 
-  // ---------- holders (public RPC) ----------
+  // ---------- holders (Jupiter top 100 + RPC program check) ----------
+  const POOLTAG = /pool|curve|amm|lp\b|liquidity|vault|lock|burn|exchange|cex|program/i;
   async function holdersFor(p) {
-    const [largest, supply] = await Promise.all([rpc("getTokenLargestAccounts", [p.mint, { commitment: "confirmed" }]), rpc("getTokenSupply", [p.mint]).catch(() => null)]);
-    const accs = ((largest && largest.value) || []).filter(a => num(a.uiAmountString || a.uiAmount) > 0);
-    if (!accs.length) throw new Error("no holders");
-    const info = await rpc("getMultipleAccounts", [accs.map(a => a.address), { encoding: "jsonParsed" }]);
-    const rows = accs.map((a, i) => { const v = info && info.value && info.value[i]; const pi = v && v.data && v.data.parsed && v.data.parsed.info; return { acc: a.address, owner: pi ? pi.owner : null, amt: num(a.uiAmountString || a.uiAmount) }; }).filter(r => r.owner);
-    const owners = [...new Set(rows.map(r => r.owner))];
-    const oi = await rpc("getMultipleAccounts", [owners, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]);
-    const prog = {}; owners.forEach((o, i) => { const v = oi && oi.value && oi.value[i]; prog[o] = v ? v.owner : SYS; });
-    const isPool = o => o === p.pool || POOL_AUTH.has(o) || (prog[o] && prog[o] !== SYS);
-    const by = new Map();
-    for (const r of rows) {
-      const k = r.owner, cur = by.get(k) || { owner: k, now: 0, accs: [], pool: isPool(k) };
-      cur.now += r.amt; cur.accs.push(r.acc); by.set(k, cur);
-    }
-    const sup = supply && supply.value ? num(supply.value.uiAmountString || supply.value.uiAmount) : 0;
-    const list = [...by.values()].sort((a, b) => b.now - a.now);
-    return { list, supply: sup, poolTok: list.filter(h => h.pool).reduce((s, h) => s + h.now, 0), minListed: list.length ? list[list.length - 1].now : 0 };
+    const [j, mi] = await Promise.all([jup("/holders/" + p.mint), rpc("getMultipleAccounts", [[p.mint], { encoding: "jsonParsed" }]).catch(() => null)]);
+    const hs = ((j && j.holders) || []).filter(h => h.address && num(h.amount) > 0);
+    if (!hs.length) throw new Error("no holders");
+    const tagged = h => (h.tags || []).concat(h.holderTags || []).some(t => POOLTAG.test(((t && (t.id || "")) + " " + (t && (t.name || "")) + " " + (typeof t === "string" ? t : ""))));
+    const top = hs.slice(0, 40).map(h => h.address);
+    const oi = await rpc("getMultipleAccounts", [top, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]).catch(() => null);
+    const prog = {}; top.forEach((o, i) => { const v = oi && oi.value && oi.value[i]; prog[o] = v ? v.owner : SYS; });
+    const list = hs.map(h => ({ owner: h.address, now: num(h.amount), pool: h.address === p.pool || POOL_AUTH.has(h.address) || tagged(h) || (prog[h.address] && prog[h.address] !== SYS) })).sort((a, b) => b.now - a.now);
+    const info = mi && mi.value && mi.value[0] && mi.value[0].data && mi.value[0].data.parsed && mi.value[0].data.parsed.info;
+    const sup = info ? num(info.supply) / Math.pow(10, info.decimals || 0) : 0;
+    return { list, supply: sup, count: j && j.count, poolTok: list.filter(h => h.pool).reduce((s2, h) => s2 + h.now, 0), minListed: list.length ? list[list.length - 1].now : 0 };
   }
-  async function balanceOf(owner, mint) {
-    const r = await rpc("getTokenAccountsByOwner", [owner, { mint }, { encoding: "jsonParsed" }]);
-    return ((r && r.value) || []).reduce((s, a) => s + num(a.account.data.parsed.info.tokenAmount.uiAmountString || a.account.data.parsed.info.tokenAmount.uiAmount), 0);
-  }
-  // a whale whose token account moved inside the window but has no matching trade: read the real change on-chain
+  // a whale whose bag moved inside the window without a trade we saw: read the real change on-chain
   async function movedFor(h, mint, since) {
     let delta = 0, touched = false;
-    for (const acc of h.accs.slice(0, 2)) {
-      const sigs = await rpc("getSignaturesForAddress", [acc, { limit: 6 }]).catch(() => []);
-      const inWin = (sigs || []).filter(s => !s.err && s.blockTime && s.blockTime * 1000 >= since);
-      if (!inWin.length) continue;
-      touched = true;
-      for (const s of inWin.slice(0, 3)) {
-        const tx = await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]).catch(() => null);
-        if (!tx || !tx.meta) continue;
-        const bal = arr => (arr || []).filter(b => b.mint === mint && b.owner === h.owner).reduce((s2, b) => s2 + num(b.uiTokenAmount.uiAmountString || b.uiTokenAmount.uiAmount), 0);
-        delta += bal(tx.meta.postTokenBalances) - bal(tx.meta.preTokenBalances);
-      }
+    const sigs = await rpc("getSignaturesForAddress", [h.owner, { limit: 10 }]).catch(() => []);
+    const inWin = (sigs || []).filter(s2 => !s2.err && s2.blockTime && s2.blockTime * 1000 >= since);
+    for (const sg of inWin.slice(0, 4)) {
+      const tx = await rpc("getTransaction", [sg.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]).catch(() => null);
+      if (!tx || !tx.meta) continue;
+      const bal = arr => (arr || []).filter(b => b.mint === mint && b.owner === h.owner).reduce((s3, b) => s3 + num(b.uiTokenAmount.uiAmountString || b.uiTokenAmount.uiAmount), 0);
+      const d = bal(tx.meta.postTokenBalances) - bal(tx.meta.preTokenBalances);
+      if (d) { touched = true; delta += d; }
     }
     return { touched, delta };
   }
@@ -722,14 +717,13 @@ footer .end{margin-left:auto}
     }
     // candidates: today's top holders + the biggest sellers of the dip (a whale that sold out has left the top list)
     const cand = new Map();
-    for (const h of H.list) if (!h.pool) cand.set(h.owner, { owner: h.owner, now: h.now, accs: h.accs, listed: true });
+    for (const h of H.list) if (!h.pool) cand.set(h.owner, { owner: h.owner, now: h.now, listed: true });
     const sellers = [...flow.entries()].filter(([w, f]) => f.sold > 0 && !cand.has(w)).sort((a, b) => b[1].sold - a[1].sold).slice(0, 6);
     const pre0 = H.list.filter(h => !h.pool).map(h => h.now).sort((a, b) => b - a)[9] || 0;
-    await Promise.all(sellers.map(async ([w, f]) => {
-      if (f.sold + H.minListed < pre0 * 0.6) return; // too small to have been a top 10 bag
-      let now = 0; try { now = await balanceOf(w, p.mint); } catch (e) { now = 0; }
-      cand.set(w, { owner: w, now, accs: [], listed: false });
-    }));
+    for (const [w, f] of sellers) {
+      if (f.sold + H.minListed < pre0 * 0.6) continue; // too small to have been a top 10 bag
+      cand.set(w, { owner: w, now: 0, accs: [], listed: false }); // not in the top 100 any more: counted as sold out
+    }
     for (const c of cand.values()) {
       const f = flow.get(c.owner) || { sold: 0, bought: 0, soldSol: 0, boughtSol: 0, n: 0 };
       c.f = f; c.pre = Math.max(0, c.now + f.sold - f.bought);
@@ -753,7 +747,7 @@ footer .end{margin-left:auto}
     const heldPct = preSum ? keptSum / preSum * 100 : 100;
     const x = {
       mint: p.mint, pool: p.pool, sym: p.sym, dex: p.dex, price: p.price, fdv: p.fdv, liq: p.liq, vol1h: p.vol1h, ch: p.ch, dip: p.dip, t: nowS(),
-      cover: Object.assign({ trades: T.trades.length, verified }, T.cover), supply: H.supply,
+      cover: Object.assign({ trades: T.trades.length, verified }, T.cover), supply: H.supply, holders: H.count || null,
       whales, heldPct, whaleSoldSol, whaleBoughtSol, paperSoldSol, paperSellers, sellSol,
       paperShare: sellSol > 0 ? paperSoldSol / sellSol * 100 : 100, poolPct: H.supply ? H.poolTok / H.supply * 100 : null,
     };
@@ -821,10 +815,10 @@ footer .end{margin-left:auto}
   }
 
   async function diag() {
-    const out = {};
-    const t0 = Date.now();
-    try { const j = await getJSON(GT + "/networks/solana/trending_pools?page=1"); out.gt = "ok " + (j.data || []).length + " in " + (Date.now() - t0) + "ms"; } catch (e) { out.gt = why(e); }
-    for (const u of RPCS) { const t = Date.now(); try { const j = await getJSON(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTokenLargestAccounts", params: ["JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"] }) }, 8000); out[u] = j.error ? "rpc error: " + j.error.message : "ok " + ((j.result && j.result.value) || []).length + " in " + (Date.now() - t) + "ms"; } catch (e) { out[u] = why(e) + " after " + (Date.now() - t) + "ms"; } }
+    const out = {}, T = async (k, f) => { const t = Date.now(); try { out[k] = (await f()) + " " + (Date.now() - t) + "ms"; } catch (e) { out[k] = why(e); } };
+    await T("geckoterminal", async () => "ok " + (((await getJSON(GT + "/networks/solana/trending_pools?page=1")).data) || []).length);
+    await T("jupiter", async () => "ok " + (((await getJSON(JUP + "/holders/JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN")).holders) || []).length);
+    for (const u of RPCS) await T(u, async () => { const j = await getJSON(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getSignaturesForAddress", params: ["JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", { limit: 1 }] }) }, 8000); return j.error ? "rpc error: " + j.error.message : "ok"; });
     return out;
   }
 
@@ -853,7 +847,7 @@ const CONFIG = {
     minVol: 4000,   // 1h volume floor, $
     boardMax: 7,    // coins X-rayed per scan
   },
-  refreshSec: 30,
+  refreshSec: 45,
   api: "/api/held",
 };
 
@@ -898,32 +892,25 @@ const CACHE = new Map();
 let BOARD = null, FILTER = "all", OPEN = null, HERO_I = 0, HERO_LIST = [], NEXT = 0;
 async function loadBoard() {
   if (PREVIEW) { BOARD = sample(); ST.mode = "preview"; return afterBoard(); }
-  try {
-    let b;
-    if (ST.mode !== "direct") {
-      try { b = await getJ(CONFIG.api + "?op=board&r=" + encodeURIComponent(RS), 45000); }
-      catch (e) { ST.err = "api: " + e.message; if (location.protocol === "file:" || ++ST.fails >= 2) ST.mode = "direct"; throw e; }
-    }
-    if (!b) { b = await C.board(R, CACHE); b.source = "direct"; b.storage = "browser"; }
-    ST.fails = 0; ST.last = now(); BOARD = b; if (ST.mode !== "direct") ST.mode = "live";
-    ls.set("held.board.v1", b);
-  } catch (e) {
-    ST.err = (ST.err ? ST.err + " | " : "") + e.message;
-    if (ST.mode === "direct" && !BOARD) { try { const b = await C.board(R, CACHE); b.source = "direct"; b.storage = "browser"; BOARD = b; ST.last = now(); ls.set("held.board.v1", b); } catch (e2) { ST.err += " | direct: " + e2.message; } }
-    if (!BOARD) { const snap = ls.get("held.board.v1", null); if (snap && snap.coins) { BOARD = snap; ST.mode = "snapshot"; } else { BOARD = sample(); ST.mode = "preview"; } }
-    else if (now() - ST.last > 120000) ST.mode = "snapshot";
-  }
+  let b = null;
+  // 1) in this browser: GeckoTerminal + Jupiter + Solana RPC from the visitor's own connection
+  try { b = await C.board(R, CACHE); b.source = "browser"; }
+  catch (e) { ST.err = "browser: " + e.message; }
+  // 2) the server, if the browser path failed
+  if (!b) { try { b = await getJ(CONFIG.api + "?op=board&r=" + encodeURIComponent(RS), 45000); } catch (e) { ST.err += " | api: " + e.message; } }
+  if (b && b.coins) { BOARD = b; ST.mode = "live"; ST.last = now(); ls.set("held.board.v1", b); }
+  else if (!BOARD) { const snap = ls.get("held.board.v1", null); if (snap && snap.coins) { BOARD = snap; ST.mode = "snapshot"; } else { BOARD = sample(); ST.mode = "preview"; } }
+  else if (now() - ST.last > 150000) ST.mode = "snapshot";
   afterBoard();
 }
 function afterBoard() {
-  if (ST.mode === "direct" && BOARD && now() - (BOARD.t || 0) < 120000) ST.mode = "live";
   collectLog(BOARD);
   renderLamp(); renderBoard(); renderHeroList(); renderLog(); renderTape();
 }
 function schedule() { NEXT = now() + CONFIG.refreshSec * 1000; setTimeout(async () => { if (!document.hidden) await loadBoard(); schedule(); }, CONFIG.refreshSec * 1000); }
 
 function renderLamp() {
-  const l = $("#lamp"), live = ST.mode === "live" || ST.mode === "direct";
+  const l = $("#lamp"), live = ST.mode === "live";
   l.className = "lamp" + (live ? " live" : "");
   $("#lampWord").textContent = live ? "live" : ST.mode === "snapshot" ? "snapshot" : ST.mode === "preview" ? "preview" : "connecting";
   $("#lampTxt").textContent = BOARD ? " · " + (BOARD.dipping || 0) + " dips watched" : "";
@@ -1012,7 +999,7 @@ function xrayHTML(x, inDrawer) {
   const covTxt = cov.full ? `every trade in the last ${cov.all} min (${cov.trades} trades)` : `all trades in the last ${cov.all} min + sells over $${cov.bigMin} for ${cov.big} min (${cov.trades} trades)`;
   const links = `<a href="https://dexscreener.com/solana/${esc(x.pool)}" target="_blank" rel="noopener">DexScreener</a><a href="https://www.geckoterminal.com/solana/pools/${esc(x.pool)}" target="_blank" rel="noopener">GeckoTerminal</a><a href="https://solscan.io/token/${esc(x.mint)}#holders" target="_blank" rel="noopener">Holders</a>`;
   const rows = ws.map(w => {
-    const note = w.left ? '<span class="tag red">left the top 20</span>' : w.moved < 0 ? `<span class="tag red">moved ${tok(-w.moved)}</span>` : w.boughtSol > 0.05 && w.held >= 1 ? '<span class="tag">added</span>' : "";
+    const note = w.left ? '<span class="tag red">sold out of the top 100</span>' : w.moved < 0 ? `<span class="tag red">moved ${tok(-w.moved)}</span>` : w.boughtSol > 0.05 && w.held >= 1 ? '<span class="tag">added</span>' : "";
     return `<tr><td>#${w.rank}</td><td><a href="https://solscan.io/account/${esc(w.owner)}" target="_blank" rel="noopener">${short(w.owner)}</a>${note}</td>
       <td class="r hide-m">${tok(w.pre)}${w.supplyPct != null ? ` <span class="mute">${w.supplyPct.toFixed(1)}%</span>` : ""}</td><td class="r hide-m">${tok(w.now)}</td>
       <td><span class="hb"><i style="width:${Math.round(w.held * 100)}%"></i></span>${heldS(w.held * 100)}</td><td class="r">${w.soldSol > 0.005 ? solS(w.soldSol) : "—"}</td></tr>`;
@@ -1022,7 +1009,7 @@ function xrayHTML(x, inDrawer) {
     <div class="xverd"><i class="v ${x.verdict}">${x.verdict === "NODIP" ? "NO DIP" : x.verdict}</i><span class="why">${x.verdict === "HELD" ? "Engine would buy: " : x.verdict === "SOLD" ? "Engine skips: " : x.verdict === "NODIP" ? "" : "Engine watches: "}${esc(x.verdict === "NODIP" ? cap(x.reason || "") : x.reason || "")}</span></div>
     <div class="xstats"><div><span class="k">Dip · 1h</span><b class="red">${dipS(x.dip)}</b></div><div><span class="k">Top 10 held</span><b>${heldS(x.heldPct)}</b></div><div><span class="k">Paper hands sold</span><b>${solS(x.paperSoldSol)}</b></div><div><span class="k">Whales sold</span><b>${solS(x.whaleSoldSol)}</b></div></div>
     <div class="xwide"><table class="wt"><thead><tr><th>#</th><th>Wallet</th><th class="r hide-m">Bag before</th><th class="r hide-m">Now</th><th>Held</th><th class="r">Sold</th></tr></thead><tbody>${rows || `<tr><td colspan="6">No holder data.</td></tr>`}</tbody></table></div>
-    <div class="xnote">Read ${ago(x.t)}: ${covTxt} from GeckoTerminal, matched against the top holders from Solana RPC${cov.verified ? `, ${cov.verified} whale bags checked on-chain for moves` : ""}. ${x.paperSellers || 0} wallets outside the top 10 sold ${solS(x.paperSoldSol)}.${x.poolPct ? ` ${x.poolPct.toFixed(0)}% of supply sits in pools.` : ""}</div>
+    <div class="xnote">Read ${ago(x.t)}: ${covTxt} from GeckoTerminal, matched against the top 100 holders${x.holders ? " of " + x.holders.toLocaleString("en-US") : ""} (Jupiter)${cov.verified ? `, ${cov.verified} whale wallets checked on-chain for moves` : ""}. ${x.paperSellers || 0} wallets outside the top 10 sold ${solS(x.paperSoldSol)}.${x.poolPct ? ` ${x.poolPct.toFixed(0)}% of supply sits in pools.` : ""}</div>
     <div class="share"><canvas width="1200" height="630" data-pool="${esc(x.pool)}"></canvas>
       <div class="acts"><button class="btn sm ink" data-act="x" data-pool="${esc(x.pool)}">Post on X</button><button class="btn sm" data-act="copy" data-pool="${esc(x.pool)}">Copy image</button><button class="btn sm" data-act="dl" data-pool="${esc(x.pool)}">Download PNG</button><button class="btn sm" data-act="link" data-pool="${esc(x.pool)}">Copy link</button></div></div>
   </div>`;
@@ -1040,11 +1027,13 @@ async function runXray(raw, scroll) {
     if (fromBoard) x = fromBoard;
     else if (PREVIEW) x = sampleX(ca);
     else {
-      try { x = await getJ(CONFIG.api + "?op=xray&ca=" + ca + "&r=" + encodeURIComponent(RS), 40000); }
-      catch (e) {
-        if (e.status === 404 || e.status === 400) throw e;
-        const P = await C.poolsForMint(ca); if (!P.pool) throw new Error("No SOL or USDC pool found for this coin on GeckoTerminal yet.");
+      try {
+        const P = await C.poolsForMint(ca);
+        if (!P.pool) { const e = new Error("No SOL or USDC pool found for this coin on GeckoTerminal yet"); e.final = true; throw e; }
         x = await C.xray(P.pool, R, P.solUsd);
+      } catch (e) {
+        if (e.final) throw e;
+        x = await getJ(CONFIG.api + "?op=xray&ca=" + ca + "&r=" + encodeURIComponent(RS), 40000);
       }
     }
     XR = x; CACHE.set(x.pool, x);
@@ -1129,14 +1118,31 @@ let LLOG = ls.get("held.log.v1", []);
 function collectLog(b) {
   if (!b || ST.mode === "preview") return;
   const seen = new Map(LLOG.map(e => [e.id, e]));
-  for (const e of ((b.log && b.log.items) || [])) { const o = seen.get(e.id); if (!o) { LLOG.push(e); seen.set(e.id, e); } else { if (e.p1h != null) o.p1h = e.p1h; if (e.p24h != null) o.p24h = e.p24h; } }
+  for (const e of ((b.log && b.log.items) || [])) { if (!e || !e.id) continue; const o = seen.get(e.id); if (!o) { LLOG.push(e); seen.set(e.id, e); } else { if (e.p1h != null) o.p1h = e.p1h; if (e.p24h != null) o.p24h = e.p24h; } }
   for (const x of b.coins || []) {
     if (x.err || (x.verdict !== "HELD" && x.verdict !== "SOLD")) continue;
     if (LLOG.some(e => e.mint === x.mint && e.verdict === x.verdict && x.t - e.t < 6 * 3600000)) continue;
-    const e = C.logEntry(x); LLOG.push(e); seen.set(e.id, e);
+    const e = C.logEntry(x); LLOG.push(e); seen.set(e.id, e); SHARE.add(e.id);
   }
   LLOG.sort((a, b2) => b2.t - a.t); if (LLOG.length > 300) LLOG.length = 300;
   ls.set("held.log.v1", LLOG);
+  pushShared();
+}
+// the shared log: every visitor's browser adds the calls it sees, so the log keeps growing for everyone
+const SHARE = new Set(); let SHARED = { storage: null, at: 0 };
+async function pullShared() {
+  if (PREVIEW) return;
+  try {
+    const j = await getJ(CONFIG.api + "?op=log", 12000); SHARED = { storage: j.storage, at: now() };
+    const seen = new Map(LLOG.map(e => [e.id, e]));
+    for (const e of j.items || []) { const o = seen.get(e.id); if (!o) LLOG.push(e); else { if (o.p1h == null && e.p1h != null) o.p1h = e.p1h; if (o.p24h == null && e.p24h != null) o.p24h = e.p24h; } }
+    LLOG.sort((a, b) => b.t - a.t); if (LLOG.length > 300) LLOG.length = 300; ls.set("held.log.v1", LLOG); renderLog();
+  } catch (e) { /* the log still works in this browser */ }
+}
+async function pushShared() {
+  if (PREVIEW || !SHARE.size) return;
+  const items = LLOG.filter(e => SHARE.has(e.id)).slice(0, 30); SHARE.clear();
+  try { await fetch(CONFIG.api + "?op=log", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) }); } catch (e) { /* retried with the next call */ }
 }
 let resolving = false;
 async function resolveLocal() {
@@ -1144,11 +1150,12 @@ async function resolveLocal() {
   const due = LLOG.filter(e => (e.p1h == null && now() > e.t + 3900000) || (e.p24h == null && now() > e.t + 86700000 && now() - e.t < 4 * 86400000)).slice(0, 4);
   for (const e of due) {
     try {
-      let r; try { r = await getJ(CONFIG.api + "?op=outcome&pool=" + e.pool + "&t=" + e.t, 15000); } catch (er) { const o = { pool: e.pool, t: e.t }; await C.outcome(o); r = o; }
+      let r; try { const o = { pool: e.pool, t: e.t }; await C.outcome(o); r = o; } catch (er) { r = await getJ(CONFIG.api + "?op=outcome&pool=" + e.pool + "&t=" + e.t, 15000); }
       if (r.p1h != null) e.p1h = r.p1h; if (r.p24h != null) e.p24h = r.p24h;
+      if (r.p1h != null || r.p24h != null) SHARE.add(e.id);
     } catch (er) { break; }
   }
-  ls.set("held.log.v1", LLOG); resolving = false; if (due.length) renderLog();
+  ls.set("held.log.v1", LLOG); resolving = false; if (due.length) { renderLog(); pushShared(); }
 }
 function renderLog() {
   const items = ST.mode === "preview" ? sampleLog() : LLOG;
@@ -1166,9 +1173,8 @@ function renderLog() {
   $("#lTable").innerHTML = `<thead><tr><th>Time (UTC)</th><th>Coin</th><th>Call</th><th class="r">Dip</th><th class="r hide-m">Top 10 held</th><th class="r hide-m">Price</th><th class="r">1h later</th><th class="r">24h later</th></tr></thead><tbody>${
     items.slice(0, 40).map(e => `<tr><td>${dm(e.t)} ${hm(e.t)}</td><td><a data-ca="${esc(e.mint)}" href="#xray">$${esc(e.sym)}</a></td><td><i class="v ${e.verdict}" style="min-width:0;padding:4px 7px;font-size:11px">${e.verdict === "HELD" ? "BUY" : "SKIP"}</i></td><td class="r red">${dipS(e.dip)}</td><td class="r hide-m">${heldS(e.heldPct)}</td><td class="r hide-m">${px(e.price)}</td>${cell(e.p1h, e, 3600000)}${cell(e.p24h, e, 86400000)}</tr>`).join("") ||
     `<tr><td colspan="8" class="mute" style="padding:22px 0">No calls yet. A call is logged the moment a coin drops ${R.dip}%+ and the read says HELD or SOLD.</td></tr>`}</tbody>`;
-  const storage = BOARD && BOARD.storage;
   $("#lNote").textContent = ST.mode === "preview" ? "Preview: sample calls, not real data." :
-    `Prices from GeckoTerminal 5-minute candles. ${storage === "shared" ? "The log is shared by every visitor." : "This page also keeps the calls it has seen in your browser, so the log grows while you watch."} ✓ = the call was right.`;
+    `Prices from GeckoTerminal 5-minute candles. Every visitor's browser adds the calls it reads${SHARED.storage ? "" : " (this browser keeps its own copy too)"}. ✓ = the call was right.`;
 }
 
 // ================= engine =================
@@ -1279,11 +1285,11 @@ function wireCA() {
 }
 function debugBox() {
   if (!DEBUG) return; let el = $("#debug"); if (!el) { el = document.createElement("div"); el.id = "debug"; document.body.appendChild(el); }
-  el.textContent = `mode ${ST.mode}\nsource ${BOARD && BOARD.source}\nstorage ${BOARD && BOARD.storage}\nboard ${BOARD ? ago(BOARD.t) : "-"}\nerr ${ST.err}\ncore ${JSON.stringify(C.STAT)}\nrule ${RS}`;
+  el.textContent = `mode ${ST.mode}\nsource ${BOARD && BOARD.source}\nlog ${SHARED.storage}\nboard ${BOARD ? ago(BOARD.t) : "-"}\nerr ${ST.err}\ncore ${JSON.stringify(C.STAT)}\nrule ${RS}`;
 }
 cfgLines(); wireCA(); renderEngine(); renderTape(); renderLog();
 loadBoard().then(() => { schedule(); heroTimer(); const ca = Q.get("ca") || Q.get("c"); if (ca) runXray(ca, true); else if (HERO_LIST[0]) { XR = HERO_LIST[0]; $("#xRes").innerHTML = xrayHTML(XR); drawShare($("#xRes canvas"), XR); } });
-loadMarket(); engineInit();
+loadMarket(); engineInit(); pullShared(); setInterval(pullShared, 180000);
 setInterval(() => { resolveLocal(); if (BOARD) { renderLamp(); const s = $("#bStat"); if (s && BOARD) s.innerHTML = s.innerHTML.replace(/updated [^<]*$/, "updated " + ago(BOARD.t)); } debugBox(); }, 5000);
 setTimeout(resolveLocal, 4000);
 

@@ -44,6 +44,30 @@ async function resolveSome(max) {
   for (const e of due) { try { if (await H.outcome(e)) ch++; } catch (err) { break; } }
   return ch;
 }
+// calls sent in by visitors' browsers. Light checks: real-looking fields, fresh, one call per coin per 6h.
+const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+let lastAdds = [];
+function mergeLog(items) {
+  let n = 0; const now = Date.now();
+  lastAdds = lastAdds.filter(t => now - t < 3600000);
+  for (const e of items.slice(0, 30)) {
+    if (!e || !B58.test(e.mint || "") || !B58.test(e.pool || "") || (e.verdict !== "HELD" && e.verdict !== "SOLD")) continue;
+    const price = +e.price, t = +e.t; if (!(price > 0) || !isFinite(t)) continue;
+    const o = LOG.items.find(x => x.id === e.id);
+    if (o) { // outcomes, only once, only when due
+      if (o.p1h == null && +e.p1h > 0 && now > o.t + 3600000) { o.p1h = +e.p1h; n++; }
+      if (o.p24h == null && +e.p24h > 0 && now > o.t + 86400000) { o.p24h = +e.p24h; n++; }
+      continue;
+    }
+    if (Math.abs(now - t) > 20 * 60000 || lastAdds.length > 120) continue;
+    if (LOG.items.some(x => x.mint === e.mint && x.verdict === e.verdict && Math.abs(x.t - t) < 6 * 3600000)) continue;
+    LOG.items.unshift({ id: String(e.id).slice(0, 40), mint: e.mint, pool: e.pool, sym: String(e.sym || "").replace(/[^\w$.-]/g, "").slice(0, 14), verdict: e.verdict, t, price,
+      dip: +e.dip || 0, heldPct: +e.heldPct || 0, paperSoldSol: +e.paperSoldSol || 0, whaleSoldSol: +e.whaleSoldSol || 0, reason: String(e.reason || "").slice(0, 120) });
+    lastAdds.push(now); n++;
+  }
+  LOG.items.sort((a, b) => b.t - a.t); if (LOG.items.length > 400) LOG.items.length = 400;
+  return n;
+}
 const sig = () => LOG.items.slice(0, 80).map(e => e.id + (e.p1h ? 1 : 0) + (e.p24h ? 1 : 0)).join("");
 
 async function buildBoard(rs) {
@@ -85,6 +109,18 @@ module.exports = async (req, res) => {
       CACHE.set(pool.pool, x);
       res.setHeader("Cache-Control", "public, s-maxage=50, stale-while-revalidate=120");
       return res.status(200).json(x);
+    }
+    if (op === "log") {
+      await loadLog();
+      if (req.method === "POST") {
+        let body = req.body; if (typeof body === "string") { try { body = JSON.parse(body); } catch (e) { body = {}; } }
+        const n = mergeLog((body && body.items) || []);
+        if (n && KV_URL) await kvSet(LOG).catch(() => {});
+        res.setHeader("Cache-Control", "no-store");
+        return res.status(200).json({ ok: true, merged: n });
+      }
+      res.setHeader("Cache-Control", "public, s-maxage=20, stale-while-revalidate=60");
+      return res.status(200).json({ since: LOG.since, storage: KV_URL ? "shared" : "memory", items: LOG.items.slice(0, 120) });
     }
     if (op === "diag") { res.setHeader("Cache-Control", "no-store"); return res.status(200).json(Object.assign(await H.diag(), { stat: H.STAT })); }
     if (op === "outcome") {

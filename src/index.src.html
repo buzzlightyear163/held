@@ -108,7 +108,7 @@
     </div>
     <div class="steps">
       <div class="step"><div class="sn">1</div><h3>Spot the dip</h3><p>GeckoTerminal's trending and most-traded Solana pools are scanned all day. A coin that falls hard inside an hour gets pulled for a read.</p><div class="cfg" id="cfg1"></div></div>
-      <div class="step"><div class="sn">2</div><h3>Read the sellers</h3><p>Every trade in the dip is matched against the top holders from Solana RPC. Whale bags that moved without a trade are checked on-chain.</p><div class="cfg" id="cfg2"></div></div>
+      <div class="step"><div class="sn">2</div><h3>Read the sellers</h3><p>Every trade in the dip is matched against the coin's top 100 holders. Whale wallets that moved without a trade are checked on-chain.</p><div class="cfg" id="cfg2"></div></div>
       <div class="step"><div class="sn">3</div><h3>Buy or skip</h3><p>Paper hands sold and the whales sat still: the engine buys. A whale dumped: it skips, however cheap it looks.</p><div class="cfg" id="cfg3"></div></div>
     </div>
   </div>
@@ -176,10 +176,10 @@
     <div class="faq">
       <details><summary>Why does it matter who sold?</summary><p>A dip where only small wallets sell is usually panic: the people with the most to lose are still in. A dip where a top holder dumps is someone with better information getting out. Same red candle, different story. HELD only buys the first kind.</p></details>
       <details><summary>Who counts as a whale?</summary><p>The 10 biggest wallets as they were before the dip, ranked from today's top holders on Solana plus anyone who sold a big bag during the dip. Pools, bonding curves and program accounts are left out.</p></details>
-      <details><summary>How does it know what a whale held before the dip?</summary><p>It takes each wallet's balance now and adds back what it sold in the last hour (GeckoTerminal trades). Whale bags that moved without a matching trade are read straight from their on-chain transactions.</p></details>
+      <details><summary>How does it know what a whale held before the dip?</summary><p>It takes each wallet's balance now and adds back what it sold in the last hour (GeckoTerminal trades). A whale that sold out of the top 100 still counts. Whale bags that moved without a matching trade are read straight from their on-chain transactions.</p></details>
       <details><summary>Is the engine buying right now?</summary><p>The board and the X-ray are live. The buying is in beta: at launch the buys are placed by hand from a public wallet that follows the board's WOULD BUY calls. The wallet is posted on this page, so every trade can be checked.</p></details>
       <details><summary>Can it be wrong?</summary><p>Yes. A dip where whales held can keep dipping, and busy coins have more trades than a free API returns, so small sells can be missed. The log scores every call 1 hour and 24 hours later so you can see how often it's right. Nothing here is financial advice.</p></details>
-      <details><summary>Where does the data come from?</summary><p>GeckoTerminal for pools, trades and price candles. Public Solana RPC for holders and wallet moves. No API keys, nothing private.</p></details>
+      <details><summary>Where does the data come from?</summary><p>GeckoTerminal for pools, trades and price candles. Jupiter for each coin's top 100 holders. Public Solana RPC for wallet moves. No API keys, nothing private. The reads run in your own browser.</p></details>
     </div>
   </div>
 </section>
