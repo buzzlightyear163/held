@@ -86,6 +86,7 @@ module.exports = async (req, res) => {
       res.setHeader("Cache-Control", "public, s-maxage=50, stale-while-revalidate=120");
       return res.status(200).json(x);
     }
+    if (op === "diag") { res.setHeader("Cache-Control", "no-store"); return res.status(200).json(Object.assign(await H.diag(), { stat: H.STAT })); }
     if (op === "outcome") {
       const pool = String(q.pool || ""), t = parseInt(q.t, 10);
       if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(pool) || !isFinite(t)) return res.status(400).json({ error: "pool and t needed" });
