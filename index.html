@@ -7,13 +7,13 @@
 <meta name="description" content="When a Solana coin drops 30% in an hour, HELD checks who sold. Top 10 holders kept their bags: it buys the dip. Whales sold: it skips. Live board, dip X-ray for any CA, and a public log.">
 <meta property="og:title" content="HELD — Buys the dip whales didn't sell.">
 <meta property="og:description" content="Every dip has a seller. HELD checks who. Paste any Solana CA for a dip X-ray.">
-<meta property="og:image" content="https://whalesheld.fun/og.png">
+<meta property="og:image" content="https://held-cyan.vercel.app/og.png">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@HeldEngine">
 <meta name="twitter:title" content="HELD — Buys the dip whales didn't sell.">
 <meta name="twitter:description" content="Every dip has a seller. HELD checks who.">
-<meta name="twitter:image" content="https://whalesheld.fun/og.png">
+<meta name="twitter:image" content="https://held-cyan.vercel.app/og.png">
 <meta name="theme-color" content="#ffffff">
 <link rel="icon" href="fav.png">
 <link rel="apple-touch-icon" href="fav.png">
@@ -611,7 +611,7 @@ footer .end{margin-left:auto}
     const base = ((rel.base_token || {}).data || {}).id || "", quote = ((rel.quote_token || {}).data || {}).id || "";
     const mint = base.replace(/^solana_/, ""), qm = quote.replace(/^solana_/, "");
     const ch = a.price_change_percentage || {}, tx = (a.transactions || {}).h1 || {}, v = a.volume_usd || {};
-    const name = String(a.name || ""), sym = (name.split(" / ")[0] || "").trim().slice(0, 14);
+    const name = String(a.name || ""), sym = (name.split(" / ")[0] || "").trim().replace(/^\$+/, "").slice(0, 14);
     const C = k => ch[k] == null || ch[k] === "" ? null : num(ch[k]);
     const o = {
       pool: a.address, mint, quote: qm, sym, name: (tokens && tokens[mint]) || "", dex: ((rel.dex || {}).data || {}).id || "",
@@ -643,7 +643,7 @@ footer .end{margin-left:auto}
   function poolOfJup(p) {
     const b = p.baseAsset || {}, s1 = b.stats1h || {}, s5 = b.stats5m || {}, s6 = b.stats6h || {}, s24 = b.stats24h || {};
     const C = v => v == null || !isFinite(+v) ? null : +v;
-    const o = { pool: p.id, mint: b.id, quote: p.quoteAsset, sym: String(b.symbol || "").slice(0, 14), dex: String(p.dex || "").toLowerCase(), price: num(b.usdPrice), quoteUsd: 0,
+    const o = { pool: p.id, mint: b.id, quote: p.quoteAsset, sym: String(b.symbol || "").replace(/^\$+/, "").slice(0, 14), dex: String(p.dex || "").toLowerCase(), price: num(b.usdPrice), quoteUsd: 0,
       fdv: num(b.mcap) || num(b.fdv), liq: num(p.liquidity) || num(b.liquidity), vol1h: num(s1.buyVolume) + num(s1.sellVolume), sell1hUsd: num(s1.sellVolume), sells1h: s1.numSells || 0,
       holders: b.holderCount || null, stock: !!b.stockData, ch: { m5: C(s5.priceChange), m30: null, h1: C(s1.priceChange), h6: C(s6.priceChange), h24: C(s24.priceChange) }, created: p.createdAt || null };
     o.dip = Math.min(o.ch.h1 ?? 0, 0);
