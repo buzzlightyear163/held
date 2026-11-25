@@ -65,7 +65,7 @@ async function loadBoard() {
   if (PREVIEW) { BOARD = sample(); ST.mode = "preview"; return afterBoard(); }
   let b = null;
   // 1) in this browser: GeckoTerminal + Jupiter + Solana RPC from the visitor's own connection
-  try { b = await C.board(R, CACHE); b.source = "browser"; }
+  try { b = await C.board(R, CACHE, part => { if (!BOARD || BOARD.partial || ST.mode !== "live" || (BOARD.coins || []).length === 0) { BOARD = Object.assign(part, { source: "browser" }); ST.mode = "live"; ST.last = now(); renderLamp(); renderBoard(); renderHeroList(); renderTape(); } }); b.source = "browser"; }
   catch (e) { ST.err = "browser: " + e.message; }
   // 2) the server, if the browser path failed
   if (!b) { try { b = await getJ(CONFIG.api + "?op=board&r=" + encodeURIComponent(RS), 45000); } catch (e) { ST.err += " | api: " + e.message; } }
@@ -101,8 +101,8 @@ function rowHTML(x, i) {
     <span class="heldc">${x.whales ? tenHTML(x) : ""}<b>${x.whales ? heldS(x.heldPct) : "—"}</b></span>
     <span class="sol p"><em class="ml">paper hands</em>${x.whales ? solS(x.paperSoldSol) : "—"}<small>${paperN}</small></span>
     <span class="sol w"><em class="ml">whales</em>${x.whales ? solS(x.whaleSoldSol) : "—"}<small>${x.whaleBoughtSol > 0.05 ? "+" + solS(x.whaleBoughtSol) + " bought" : ""}</small></span>
-    <span class="vv"><i class="v ${x.verdict}">${x.verdict === "NODIP" ? "NO DIP" : x.verdict}</i></span>
-    <span class="eng ${x.engine === "would buy" ? "buy" : x.engine}">${esc(x.engine)}</span>
+    <span class="vv"><i class="v ${x.pending ? "WATCH" : x.verdict}">${x.pending ? "…" : x.verdict === "NODIP" ? "NO DIP" : x.verdict}</i></span>
+    <span class="eng ${x.engine === "would buy" ? "buy" : x.engine}">${x.pending ? "reading" : esc(x.engine)}</span>
     <span class="why">${esc(x.reason || "")}</span>
   </div>${OPEN === x.pool ? `<div class="drawer">${xrayHTML(x, true)}</div>` : ""}`;
 }

@@ -507,7 +507,7 @@ footer .end{margin-left:auto}
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   const GT = "https://api.geckoterminal.com/api/v2";
-  const RPCS = ["https://solana-rpc.publicnode.com", "https://api.mainnet-beta.solana.com"];
+  const RPCS = ["https://solana-rpc.publicnode.com"];
   const JUP = "https://datapi.jup.ag/v1";
   const SOL = "So11111111111111111111111111111111111111112";
   const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -558,7 +558,8 @@ footer .end{margin-left:auto}
     }
     return fn => new Promise((res, rej) => { q.push({ fn, res, rej }); pump(); });
   }
-  const gq = queue(260, 2), rq = queue(40, 6), jq = queue(150, 2);
+  const IS_BROWSER = typeof window !== "undefined";
+  const gq = queue(IS_BROWSER ? 2100 : 400, 1), rq = queue(60, 4), jq = queue(200, 2);
   const STAT = { gt: 0, gtErr: 0, rpc: 0, rpcErr: 0, last429: 0, errs: [] };
   const why = e => (e && e.message || String(e)) + (e && e.cause ? " (" + (e.cause.code || e.cause.message || e.cause) + ")" : "");
   const note = t => { STAT.errs.unshift(new Date().toISOString().slice(11, 19) + " " + t); if (STAT.errs.length > 12) STAT.errs.length = 12; };
@@ -574,10 +575,15 @@ footer .end{margin-left:auto}
   }
   async function gt(path) {
     for (let i = 0; i < 3; i++) {
-      try { const j = await gq(() => getJSON(GT + path)); STAT.gt++; return j; }
-      catch (e) { STAT.gtErr++; note("gt " + path.slice(0, 50) + " " + why(e)); if (e.status === 429) { STAT.last429 = Date.now(); await sleep(1600 * (i + 1)); continue; } if (i === 2 || (e.status && e.status !== 502 && e.status !== 503)) throw e; await sleep(500); }
+      try { const j = await gq(() => getJSON(GT + path, null, 12000)); STAT.gt++; return j; }
+      catch (e) {
+        STAT.gtErr++; note("gt " + path.slice(0, 50) + " " + why(e));
+        const limited = e.status === 429 || (!e.status && e.name !== "AbortError"); // a 429 in the browser shows up as "Failed to fetch"
+        if (limited) { STAT.last429 = Date.now(); await sleep(4000 * (i + 1)); continue; }
+        if (i === 2 || (e.status && e.status !== 502 && e.status !== 503)) throw e; await sleep(800);
+      }
     }
-    throw new Error("geckoterminal busy");
+    throw new Error("GeckoTerminal is rate limiting, retrying next scan");
   }
   async function jup(path) {
     for (let i = 0; i < 2; i++) {
@@ -678,9 +684,12 @@ footer .end{margin-left:auto}
     const hs = ((j && j.holders) || []).filter(h => h.address && num(h.amount) > 0);
     if (!hs.length) throw new Error("no holders");
     const tagged = h => (h.tags || []).concat(h.holderTags || []).some(t => POOLTAG.test(((t && (t.id || "")) + " " + (t && (t.name || "")) + " " + (typeof t === "string" ? t : ""))));
-    const top = hs.slice(0, 40).map(h => h.address);
-    const oi = await rpc("getMultipleAccounts", [top, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]).catch(() => null);
-    const prog = {}; top.forEach((o, i) => { const v = oi && oi.value && oi.value[i]; prog[o] = v ? v.owner : SYS; });
+    const top = hs.slice(0, 30).map(h => h.address), prog = {};
+    await Promise.all([0, 10, 20].map(async k => {
+      const part = top.slice(k, k + 10); if (!part.length) return;
+      const oi = await rpc("getMultipleAccounts", [part, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]).catch(() => null);
+      if (oi && oi.value) part.forEach((o, i) => { const v = oi.value[i]; prog[o] = v ? v.owner : SYS; });
+    }));
     const list = hs.map(h => ({ owner: h.address, now: num(h.amount), pool: h.address === p.pool || POOL_AUTH.has(h.address) || tagged(h) || (prog[h.address] && prog[h.address] !== SYS) })).sort((a, b) => b.now - a.now);
     const info = mi && mi.value && mi.value[0] && mi.value[0].data && mi.value[0].data.parsed && mi.value[0].data.parsed.info;
     const sup = info ? num(info.supply) / Math.pow(10, info.decimals || 0) : 0;
@@ -772,20 +781,25 @@ footer .end{margin-left:auto}
   }
 
   // ---------- the board ----------
-  async function board(R, cache) {
+  async function board(R, cache, onUpdate) {
     R = R || RULE; cache = cache || new Map();
     const L = await scanList();
     const dipping = L.pools.filter(p => -p.dip >= R.watch && p.liq >= R.minLiq && p.vol1h >= R.minVol).sort((a, b) => a.dip - b.dip);
     const pick = dipping.slice(0, R.boardMax);
     const coins = [];
+    const head = () => ({ t: nowS(), solUsd: L.solUsd, scanned: L.scanned, watched: L.pools.length, dipping: dipping.length, deep: dipping.filter(p => -p.dip >= R.dip).length, rule: R });
+    const pending = p => ({ mint: p.mint, pool: p.pool, sym: p.sym, dex: p.dex, price: p.price, fdv: p.fdv, liq: p.liq, ch: p.ch, dip: p.dip, t: nowS(), pending: true, verdict: "WATCH", engine: "watch", reason: "reading the sellers…" });
+    const emit = () => { if (onUpdate) try { onUpdate(Object.assign(head(), { partial: true, coins: coins.concat(pick.slice(coins.length).map(pending)) })); } catch (e) {} };
+    emit();
     for (const p of pick) {
       const k = p.pool, c = cache.get(k);
       if (c && nowS() - c.t < 150000) { coins.push(Object.assign({}, c, { price: p.price, ch: p.ch, dip: p.dip, fdv: p.fdv, liq: p.liq }, verdict(Object.assign({}, c, { dip: p.dip }), R))); continue; }
       try { const x = await xray(p, R, L.solUsd); cache.set(k, x); coins.push(x); }
-      catch (e) { coins.push({ mint: p.mint, pool: p.pool, sym: p.sym, price: p.price, fdv: p.fdv, liq: p.liq, ch: p.ch, dip: p.dip, t: nowS(), err: String(e.message || e), verdict: "WATCH", engine: "watch", reason: "holder read failed, retrying" }); }
+      catch (e) { coins.push({ mint: p.mint, pool: p.pool, sym: p.sym, dex: p.dex, price: p.price, fdv: p.fdv, liq: p.liq, ch: p.ch, dip: p.dip, t: nowS(), err: String(e.message || e), verdict: "WATCH", engine: "watch", reason: "read failed, retrying next scan" }); }
+      emit();
     }
     for (const [k, v] of cache) if (nowS() - v.t > 900000) cache.delete(k);
-    return { t: nowS(), solUsd: L.solUsd, scanned: L.scanned, watched: L.pools.length, dipping: dipping.length, deep: dipping.filter(p => -p.dip >= R.dip).length, rule: R, coins };
+    return Object.assign(head(), { coins });
   }
 
   // ---------- price after a signal (for the log) ----------
@@ -894,7 +908,7 @@ async function loadBoard() {
   if (PREVIEW) { BOARD = sample(); ST.mode = "preview"; return afterBoard(); }
   let b = null;
   // 1) in this browser: GeckoTerminal + Jupiter + Solana RPC from the visitor's own connection
-  try { b = await C.board(R, CACHE); b.source = "browser"; }
+  try { b = await C.board(R, CACHE, part => { if (!BOARD || BOARD.partial || ST.mode !== "live" || (BOARD.coins || []).length === 0) { BOARD = Object.assign(part, { source: "browser" }); ST.mode = "live"; ST.last = now(); renderLamp(); renderBoard(); renderHeroList(); renderTape(); } }); b.source = "browser"; }
   catch (e) { ST.err = "browser: " + e.message; }
   // 2) the server, if the browser path failed
   if (!b) { try { b = await getJ(CONFIG.api + "?op=board&r=" + encodeURIComponent(RS), 45000); } catch (e) { ST.err += " | api: " + e.message; } }
@@ -930,8 +944,8 @@ function rowHTML(x, i) {
     <span class="heldc">${x.whales ? tenHTML(x) : ""}<b>${x.whales ? heldS(x.heldPct) : "—"}</b></span>
     <span class="sol p"><em class="ml">paper hands</em>${x.whales ? solS(x.paperSoldSol) : "—"}<small>${paperN}</small></span>
     <span class="sol w"><em class="ml">whales</em>${x.whales ? solS(x.whaleSoldSol) : "—"}<small>${x.whaleBoughtSol > 0.05 ? "+" + solS(x.whaleBoughtSol) + " bought" : ""}</small></span>
-    <span class="vv"><i class="v ${x.verdict}">${x.verdict === "NODIP" ? "NO DIP" : x.verdict}</i></span>
-    <span class="eng ${x.engine === "would buy" ? "buy" : x.engine}">${esc(x.engine)}</span>
+    <span class="vv"><i class="v ${x.pending ? "WATCH" : x.verdict}">${x.pending ? "…" : x.verdict === "NODIP" ? "NO DIP" : x.verdict}</i></span>
+    <span class="eng ${x.engine === "would buy" ? "buy" : x.engine}">${x.pending ? "reading" : esc(x.engine)}</span>
     <span class="why">${esc(x.reason || "")}</span>
   </div>${OPEN === x.pool ? `<div class="drawer">${xrayHTML(x, true)}</div>` : ""}`;
 }
